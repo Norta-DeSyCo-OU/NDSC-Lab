@@ -133,7 +133,7 @@ jobs:
 
       - name: Trivy (self-installed, non-blocking)
         run: |
-          TRIVY_VERSION=0.57.1
+          TRIVY_VERSION=0.70.0
           curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             | tar -xz -C /tmp trivy
           /tmp/trivy fs --severity HIGH,CRITICAL --ignore-unfixed --format table . || echo "trivy findings (non-blocking)"
