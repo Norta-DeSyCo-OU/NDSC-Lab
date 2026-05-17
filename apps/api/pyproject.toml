@@ -1,0 +1,66 @@
+[project]
+name = "ndsc-lab-api"
+version = "0.1.0"
+description = "NDSC Lab — backend API"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.115.6",
+  "uvicorn[standard]==0.34.0",
+  "pydantic[email]==2.10.4",
+  "pydantic-settings==2.7.1",
+  "email-validator==2.2.0",
+  "sqlalchemy[asyncio]==2.0.36",
+  "asyncpg==0.30.0",
+  "alembic==1.14.0",
+  "redis==5.2.1",
+  "rq==2.0.0",
+  "argon2-cffi==23.1.0",
+  "authlib==1.4.0",
+  "pyjwt[crypto]==2.10.1",
+  "itsdangerous==2.2.0",
+  "httpx==0.28.1",
+  "aioboto3==13.3.0",
+  "cryptography==44.0.0",
+  "pikepdf==9.4.2",
+  "weasyprint==63.1",
+  "qrcode[pil]==8.0",
+  "Pillow==11.0.0",
+  "nh3==0.2.20",
+  "markdown-it-py==3.0.0",
+  "python-ulid==3.0.0",
+  "python-multipart==0.0.19",
+  "prometheus-fastapi-instrumentator==7.0.2",
+  "sentry-sdk[fastapi]==2.19.2",
+  "structlog==24.4.0",
+  "pyclamd==0.4.0",
+  "tenacity==9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.4",
+  "pytest-asyncio==0.25.0",
+  "pytest-cov==6.0.0",
+  "testcontainers[postgres,redis,minio]==4.9.0",
+  "factory-boy==3.3.1",
+  "ruff==0.8.4",
+  "mypy==1.13.0",
+  "types-redis",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+lint.select = ["E", "F", "I", "B", "UP", "S", "A", "C4", "ASYNC", "PERF"]
+lint.ignore = ["S101"]
+lint.per-file-ignores = { "tests/*" = ["S"] }
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["migrations/"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"

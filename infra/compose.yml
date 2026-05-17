@@ -1,0 +1,160 @@
+name: ndsc-lab
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+  api:
+    build:
+      context: ../apps/api
+    restart: unless-stopped
+    env_file: ../apps/api/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      clamav:
+        condition: service_started
+    expose:
+      - "8000"
+
+  worker:
+    build:
+      context: ../apps/api
+    restart: unless-stopped
+    env_file: ../apps/api/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      clamav:
+        condition: service_started
+    command: ["python", "-u", "-m", "app.worker"]
+    # Worker has no HTTP listener — disable the api image's healthcheck.
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "app.worker"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  web:
+    build:
+      context: ../apps/web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: "/api"
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: "/api"
+      INTERNAL_API_BASE_URL: "http://api:8000"
+    depends_on:
+      - api
+    expose:
+      - "3000"
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ndsc
+      POSTGRES_PASSWORD: ndsc
+      POSTGRES_DB: ndsc
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ndsc -d ndsc"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: devkey
+      MINIO_ROOT_PASSWORD: devsecret
+    volumes:
+      - minio_data:/data
+    expose:
+      - "9000"
+      - "9001"
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-11-21T17-21-54Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 devkey devsecret; do sleep 1; done;
+      mc mb --ignore-existing local/ndsc-hot;
+      mc mb --ignore-existing local/ndsc-cold;
+      echo 'buckets ready';
+      "
+    restart: "no"
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav_data:/var/lib/clamav
+      - ./clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom_data:/prometheus
+    expose:
+      - "9090"
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_PASSWORD: "change-me"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    expose:
+      - "3001"
+
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:
+  clamav_data:
+  prom_data:
+  grafana_data:
+  caddy_data:
+  caddy_config:

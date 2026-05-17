@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+@theme {
+  /* Tailwind 4 needs explicit `--color-*` entries for built-in utilities
+     like `text-black`/`text-white` to resolve. Without these, anchors
+     inherit the global `a { color }` rule and the button text vanishes. */
+  --color-black: #000000;
+  --color-white: #ffffff;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-yellow-200: #fef08a;
+  --color-yellow-400: #facc15;
+  --color-yellow-500: #eab308;
+
+  /* Palette extracted from nortadesyco.xyz */
+  --color-bg-base: #0a0f1e;
+  --color-bg-surface: #0a1628;
+  --color-bg-panel: #131b35;
+  --color-bg-edge: #050713;
+  --color-fg: #ffffff;
+  --color-fg-muted: #cccccc;
+  --color-brand-cyan: #18c5ff;
+  --color-brand-blue-1: #2563ff;
+  --color-brand-blue-2: #3b82f6;
+  --color-brand-blue-3: #1e40af;
+  --color-brand-blue-4: #1e3a8a;
+  --color-brand-sky: #60a5fa;
+
+  /* Light-mode counterparts */
+  --color-bg-base-light: #ffffff;
+  --color-bg-surface-light: #f6f8fc;
+  --color-bg-panel-light: #ffffff;
+  --color-fg-light: #0a0f1e;
+  --color-fg-muted-light: #555a6b;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+  background: var(--color-bg-base);
+  color: var(--color-fg);
+}
+
+html.light {
+  color-scheme: light;
+  background: var(--color-bg-base-light);
+  color: var(--color-fg-light);
+}
+
+body {
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  /* Subtle ambient glow — radial cyan haze behind the fold to add depth
+     without changing the base palette. Doesn't repaint on scroll because
+     fixed-attached backgrounds compose in their own layer. */
+  background:
+    radial-gradient(
+      1100px 600px at 12% -10%,
+      color-mix(in oklab, var(--color-brand-cyan), transparent 90%),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 500px at 95% 0%,
+      color-mix(in oklab, var(--color-brand-blue-2), transparent 92%),
+      transparent 55%
+    ),
+    var(--color-bg-base);
+  background-attachment: fixed;
+}
+
+html.light body {
+  background:
+    radial-gradient(
+      1100px 600px at 12% -10%,
+      color-mix(in oklab, var(--color-brand-cyan), transparent 92%),
+      transparent 60%
+    ),
+    var(--color-bg-base-light);
+  background-attachment: fixed;
+}
+
+/* Typography lift for headings — keeps reading line-height tight on h1/h2. */
+h1, h2, h3 {
+  letter-spacing: -0.01em;
+}
+
+/* Default anchor styling. Scoped to plain text contexts only — anchors that
+   carry a Tailwind `text-*` utility (e.g. buttons styled with `text-black`)
+   keep their declared color. */
+a:not([class*="text-"]) {
+  color: var(--color-brand-cyan);
+  text-decoration: none;
+}
+
+a:not([class*="text-"]):hover {
+  text-decoration: underline;
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Focus ring (WCAG 2.2 AA) */
+:focus-visible {
+  outline: 2px solid var(--color-brand-cyan);
+  outline-offset: 2px;
+}
