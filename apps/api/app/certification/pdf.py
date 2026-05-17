@@ -10,7 +10,7 @@ import qrcode
 from PIL import Image
 from weasyprint import HTML
 
-from app.certification.signer import SignResult, sign_bytes
+from app.certification.signer import sign_bytes
 from app.core.settings import get_settings
 
 _TEMPLATE = """

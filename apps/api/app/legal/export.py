@@ -4,7 +4,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import aioboto3
 from sqlalchemy import select
@@ -13,9 +13,7 @@ from app.certification.models import Certificate
 from app.comments.models import Comment
 from app.content.models import Item
 from app.core.db import session_scope
-from app.core.r2 import presign_get
 from app.core.settings import get_settings
-from app.core.types import new_ulid
 from app.identity.models import User
 from app.legal.models import DataExportRequest
 
@@ -116,6 +114,6 @@ async def build_one(req_id: str) -> None:
             )
 
         req.state = "ready"
-        req.built_at = datetime.now(timezone.utc)
+        req.built_at = datetime.now(UTC)
         req.presigned_url_expires_at = req.built_at + timedelta(hours=72)
         await s.flush()

@@ -1,12 +1,12 @@
 """Authenticated self-service routes (account-scope)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Annotated, Any
+from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.certification.models import Certificate
@@ -186,7 +186,7 @@ async def change_or_set_password(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="password_breached")
 
     user.password_hash = hash_password(body.new_password)
-    user.password_changed_at = datetime.now(timezone.utc)
+    user.password_changed_at = datetime.now(UTC)
     await audit_record(
         s,
         actor_user_id=user.id,
@@ -335,7 +335,7 @@ async def self_revoke_contributor(
     if body.content_fate in ("tombstone", "reassign_house"):
         await s.execute(
             update(Item).where(Item.author_id == user.id).values(state="tombstoned",
-                                                                  deleted_at=datetime.now(timezone.utc))
+                                                                  deleted_at=datetime.now(UTC))
         )
     await audit_record(
         s,

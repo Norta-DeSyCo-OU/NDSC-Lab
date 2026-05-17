@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from app.core.audit import _canon, _prune_pii
+
 # Env bootstrap.
 from tests.test_argon2 import _pem  # noqa: F401
-
-from app.core.audit import _canon, _prune_pii
 
 
 def test_prune_pii() -> None:

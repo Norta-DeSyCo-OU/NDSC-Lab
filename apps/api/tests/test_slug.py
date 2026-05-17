@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from app.content.slug import is_reserved, normalize_slug
+
 # Env bootstrap.
 from tests.test_argon2 import _pem  # noqa: F401
-
-from app.content.slug import is_reserved, normalize_slug
 
 
 def test_normalize_basic() -> None:

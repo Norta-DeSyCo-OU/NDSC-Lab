@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_session
 from app.core.redis_client import get_redis
 from app.core.security.csrf import issue_csrf, require_csrf
-from app.core.security.signup_flood import SignupCooldownError, check_and_record as signup_flood_check
-from app.identity.deps import current_actor, require_user
+from app.core.security.signup_flood import SignupCooldownError
+from app.core.security.signup_flood import check_and_record as signup_flood_check
+from app.identity.deps import require_user
 from app.identity.models import User
 from app.identity.schemas import (
     ForgotIn,

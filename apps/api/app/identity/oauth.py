@@ -8,6 +8,7 @@ import base64
 import hashlib
 import json
 import secrets
+from datetime import UTC
 from typing import Any
 from urllib.parse import urlencode
 
@@ -91,8 +92,7 @@ async def verify_id_token(id_token: str) -> dict[str, Any]:
     """Verify Google ID token signature, iss, aud, exp."""
     import time
 
-    from cryptography.hazmat.primitives.asymmetric import padding, rsa
-    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+    from cryptography.hazmat.primitives.asymmetric import rsa
     from jwt.algorithms import RSAAlgorithm  # type: ignore[import-untyped]
 
     s = get_settings()
@@ -144,15 +144,15 @@ async def upsert_oauth_user(
         s.add(OAuthIdentity(user_id=user_by_email.id, provider="google", subject=google_sub))
         return user_by_email
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     user = User(
         email=email,
-        email_verified_at=datetime.now(timezone.utc),
+        email_verified_at=datetime.now(UTC),
         state="active",
         role="user",
         password_hash=None,
-        age_confirmed_at=datetime.now(timezone.utc),
+        age_confirmed_at=datetime.now(UTC),
         tos_version=tos_version,
         cookie_consent_version=cookie_consent_version,
     )

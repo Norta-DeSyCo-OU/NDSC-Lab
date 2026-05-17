@@ -6,24 +6,26 @@ from typing import Annotated, Any
 import aioboto3
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.content.models import Attachment, Item
-from app.core.audit import record as audit_record
 from app.core.db import get_session
 from app.core.policy import Actor, PolicyError, authorize
-from app.legal.models import ContributorTunable
-from sqlalchemy import func
 from app.core.r2 import (
     complete_multipart_upload as _complete,
+)
+from app.core.r2 import (
     create_multipart_upload as _create_mpu,
+)
+from app.core.r2 import (
     delete_object,
     presign_get,
 )
 from app.core.security.csrf import require_csrf
 from app.core.settings import get_settings
 from app.identity.deps import current_actor, require_user
+from app.legal.models import ContributorTunable
 
 router = APIRouter(prefix="/uploads", tags=["content"])
 
@@ -251,12 +253,12 @@ async def simple_upload(
     r2_key = f"users/{actor.user_id}/{item.id}/{role}/{safe_filename}"
 
     sess = aioboto3.Session()
-    s3_kwargs = dict(
-        endpoint_url=settings.r2_endpoint_url,
-        region_name=settings.r2_region,
-        aws_access_key_id=settings.r2_access_key_id.get_secret_value(),
-        aws_secret_access_key=settings.r2_secret_access_key.get_secret_value(),
-    )
+    s3_kwargs = {
+        "endpoint_url": settings.r2_endpoint_url,
+        "region_name": settings.r2_region,
+        "aws_access_key_id": settings.r2_access_key_id.get_secret_value(),
+        "aws_secret_access_key": settings.r2_secret_access_key.get_secret_value(),
+    }
 
     total_bytes = 0
     parts: list[dict[str, Any]] = []
@@ -417,7 +419,7 @@ async def stream_attachment(
     Owner / admin otherwise (so contributors can preview their own uploads
     while still in scanning state).
     """
-    from fastapi.responses import StreamingResponse, Response
+    from fastapi.responses import StreamingResponse
 
     att = await s.scalar(select(Attachment).where(Attachment.id == attachment_id))
     if not att or att.state == "deleted":

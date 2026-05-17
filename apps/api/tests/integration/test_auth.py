@@ -1,16 +1,13 @@
 """FR-AUTH integration tests."""
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from tests.integration.conftest import (
-    BASE,
-    Client,
+    COOKIE_V,
     PASSWORD,
     TOS_V,
-    COOKIE_V,
+    Client,
     db_exec,
     db_one,
     make_user,

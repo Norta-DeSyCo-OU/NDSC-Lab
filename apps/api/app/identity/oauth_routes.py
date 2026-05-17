@@ -1,9 +1,7 @@
 """Google OAuth HTTP routes."""
 from __future__ import annotations
 
-import json
 import secrets
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse

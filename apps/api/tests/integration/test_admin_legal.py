@@ -73,7 +73,7 @@ async def test_leg_002_takedown_lifecycle(admin: Client) -> None:
 
 @pytest.mark.asyncio
 async def test_leg_004_erasure_grace_window() -> None:
-    from tests.integration.conftest import make_user, PASSWORD
+    from tests.integration.conftest import PASSWORD, make_user
 
     u = await make_user()
     r = await u.post("/me/erasure", json={"password": PASSWORD})

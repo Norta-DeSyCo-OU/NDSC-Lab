@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.analytics.worker import purge_raw, reaggregate
 from app.content.transcode import needs_transcode, transcode_one
@@ -99,7 +99,7 @@ async def _periodic() -> None:
             await reaggregate(days=7)
             n = await purge_raw(retention_days=90)
             await execute_due()
-            log.info("periodic_done", purged=n, ts=datetime.now(timezone.utc).isoformat())
+            log.info("periodic_done", purged=n, ts=datetime.now(UTC).isoformat())
         except Exception as e:  # noqa: BLE001
             log.warning("periodic_failed", error=str(e))
         await asyncio.sleep(3600)

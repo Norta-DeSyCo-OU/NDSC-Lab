@@ -1,7 +1,7 @@
 """Content service: item state machine."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,7 +91,7 @@ async def update_draft(
         item.video_kind = video_kind
     if license is not None:
         item.license = license
-    item.updated_at = datetime.now(timezone.utc)
+    item.updated_at = datetime.now(UTC)
     return item
 
 
@@ -123,7 +123,7 @@ async def approve_publish(
 ) -> None:
     authorize(actor, "item.publish", item)
     item.state = "published"
-    item.published_at = datetime.now(timezone.utc)
+    item.published_at = datetime.now(UTC)
     await audit_record(
         s,
         actor_user_id=actor.user_id,
@@ -169,7 +169,7 @@ async def delete_item(
 ) -> None:
     authorize(actor, "item.delete", item)
     item.state = "tombstoned"
-    item.deleted_at = datetime.now(timezone.utc)
+    item.deleted_at = datetime.now(UTC)
     await audit_record(
         s,
         actor_user_id=actor.user_id,

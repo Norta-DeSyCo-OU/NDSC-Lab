@@ -17,7 +17,6 @@ import pytest
 
 from tests.integration.conftest import BASE, Client, db_exec
 
-
 # A tiny valid-ish MP4 header (won't actually play; sufficient for HTTP byte transport).
 MP4_BYTES = bytes.fromhex(
     "0000001c66747970697336340000020069736f346d6d703431"
@@ -30,9 +29,9 @@ async def _wait_clean(att_id: str, timeout: float = 30.0) -> None:
     """Poll DB until attachment state moves out of `scanning`."""
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
-        import psycopg2
-
         import os
+
+        import psycopg2
 
         with psycopg2.connect(os.environ["DATABASE_URL"].replace("+asyncpg", "")) as c, c.cursor() as cur:
             cur.execute("SELECT state FROM attachments WHERE id=%s", (att_id,))

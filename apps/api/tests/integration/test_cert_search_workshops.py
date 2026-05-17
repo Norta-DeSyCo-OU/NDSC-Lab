@@ -1,10 +1,10 @@
 """FR-CERT + FR-SEARCH + FR-WS integration tests."""
 from __future__ import annotations
 
-import pytest
 import httpx
+import pytest
 
-from tests.integration.conftest import Client, make_user
+from tests.integration.conftest import Client
 
 
 @pytest.mark.asyncio

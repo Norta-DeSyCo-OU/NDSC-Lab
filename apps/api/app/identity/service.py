@@ -1,8 +1,7 @@
 """Identity service: signup, login, verify, forgot, reset."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,7 +47,7 @@ async def signup(
     user = User(
         email=email,
         password_hash=hash_password(password),
-        age_confirmed_at=datetime.now(timezone.utc),
+        age_confirmed_at=datetime.now(UTC),
         tos_version=tos_version,
         cookie_consent_version=cookie_consent_version,
         state="pending_verify",
@@ -93,7 +92,7 @@ async def consume_verification_token(s: AsyncSession, token: str) -> str | None:
     if not user or user.state == "banned" or user.state == "deleted":
         return None
     if user.email_verified_at is None:
-        user.email_verified_at = datetime.now(timezone.utc)
+        user.email_verified_at = datetime.now(UTC)
         user.state = "active"
     return user.id
 
@@ -161,5 +160,5 @@ async def consume_password_reset(s: AsyncSession, *, token: str, new_password: s
     if not user or user.state != "active":
         return False
     user.password_hash = hash_password(new_password)
-    user.password_changed_at = datetime.now(timezone.utc)
+    user.password_changed_at = datetime.now(UTC)
     return True

@@ -1,7 +1,7 @@
 """Comment routes."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -19,7 +19,7 @@ from app.core.redis_client import get_redis
 from app.core.security.csrf import require_csrf
 from app.core.security.rate_limit import hit
 from app.core.settings import get_settings
-from app.identity.deps import current_actor, require_admin, require_user
+from app.identity.deps import require_user
 
 router = APIRouter(tags=["comments"])
 
@@ -128,7 +128,7 @@ async def edit_comment(
         authorize(actor, "comment.update", c)
     except PolicyError as e:
         raise HTTPException(status.HTTP_403_FORBIDDEN) from e
-    if c.created_at < datetime.now(timezone.utc) - timedelta(minutes=15):
+    if c.created_at < datetime.now(UTC) - timedelta(minutes=15):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="edit_window_expired")
     c.body_md = body.body_md
     return _to_out(c)
@@ -150,7 +150,7 @@ async def delete_comment(
     except PolicyError as e:
         raise HTTPException(status.HTTP_403_FORBIDDEN) from e
     c.state = "hidden_by_admin" if actor.role == "admin" else "deleted"
-    c.deleted_at = datetime.now(timezone.utc)
+    c.deleted_at = datetime.now(UTC)
     if actor.role == "admin":
         await audit_record(
             s,

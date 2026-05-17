@@ -29,7 +29,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import record as audit_record
 from app.core.settings import get_settings
 
-
 # Platform-setting keys (overridable via admin UI).
 KEY_ENABLED = "signup_flood.enabled"
 KEY_LIMIT = "signup_flood.limit"

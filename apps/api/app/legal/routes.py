@@ -1,7 +1,7 @@
 """Legal HTTP routes: takedown, erasure, data export."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -14,7 +14,7 @@ from app.core.db import get_session
 from app.core.policy import Actor, PolicyError, authorize
 from app.core.security.argon2 import verify_password
 from app.core.security.csrf import require_csrf
-from app.identity.deps import current_actor, require_admin, require_user
+from app.identity.deps import require_admin, require_user
 from app.identity.models import User
 from app.legal.models import DataExportRequest, ErasureRequest, TakedownRequest
 
@@ -74,7 +74,7 @@ async def decide_takedown(
     t.state = "closed_tombstoned" if body.action == "tombstone" else "closed_rejected"
     t.decision_actor_id = actor.user_id
     t.decision_reason = body.reason
-    t.decided_at = datetime.now(timezone.utc)
+    t.decided_at = datetime.now(UTC)
     await audit_record(
         s,
         actor_user_id=actor.user_id,
@@ -121,7 +121,7 @@ async def request_erasure(
         marker = await r.get(f"oauth:recent:{user.id}")
         if not marker:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="recent_oauth_required")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     e = ErasureRequest(
         user_id=user.id,
         state="pending",
@@ -146,7 +146,7 @@ async def cancel_erasure(
     )
     if not e:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    if e.grace_until < datetime.now(timezone.utc):
+    if e.grace_until < datetime.now(UTC):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="grace_expired")
     e.state = "cancelled"
     return {"ok": True}

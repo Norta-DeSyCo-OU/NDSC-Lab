@@ -5,15 +5,13 @@ because chain is computed over canonical non-PII projection (D-15).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.certification.models import CertAdminPseudonym
 from app.comments.models import Comment
 from app.content.models import Attachment, Item
-from app.core.audit import record as audit_record
 from app.core.db import session_scope
 from app.core.r2 import delete_object
 from app.core.types import new_ulid
@@ -25,7 +23,7 @@ async def execute_due() -> int:
     """Run erasure for all requests whose grace period has passed. Returns processed count."""
     processed = 0
     async with session_scope() as s:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         rows = (
             await s.scalars(
                 select(ErasureRequest).where(
@@ -54,7 +52,7 @@ async def _execute_one(s: AsyncSession, req: ErasureRequest) -> None:
     items = (await s.scalars(select(Item).where(Item.author_id == user.id))).all()
     for it in items:
         it.state = "tombstoned"
-        it.deleted_at = datetime.now(timezone.utc)
+        it.deleted_at = datetime.now(UTC)
 
     # Delete blobs in R2.
     atts = (await s.scalars(select(Attachment).where(Attachment.owner_user_id == user.id))).all()
@@ -100,7 +98,7 @@ async def _execute_one(s: AsyncSession, req: ErasureRequest) -> None:
     user.email = f"deleted-{user.id}@deleted.invalid"
     user.password_hash = None
     user.display_name = None
-    user.deleted_at = datetime.now(timezone.utc)
+    user.deleted_at = datetime.now(UTC)
 
     req.state = "completed"
-    req.completed_at = datetime.now(timezone.utc)
+    req.completed_at = datetime.now(UTC)

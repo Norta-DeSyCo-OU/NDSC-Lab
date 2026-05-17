@@ -13,8 +13,8 @@ os.environ.setdefault("AUTH_PASSWORD_PEPPER", "test-pepper")
 os.environ.setdefault("AUDIT_HMAC_KEY", "test-key")
 os.environ.setdefault("SESSION_SIGNING_KEY", "test-key")
 # Generate ephemeral Ed25519 PEM for cert tests
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 _pem = Ed25519PrivateKey.generate().private_bytes(
     encoding=serialization.Encoding.PEM,

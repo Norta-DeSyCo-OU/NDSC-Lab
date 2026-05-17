@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-# env bootstrap via shared fixture
-from tests.test_argon2 import _pem  # noqa: F401  side-effect: ensures env set
+from datetime import UTC, datetime
 
 from app.certification.pdf import extract_signature, render_and_sign, strip_signature
 from app.certification.signer import public_key_pem, verify_bytes
+
+# env bootstrap via shared fixture
+from tests.test_argon2 import _pem  # noqa: F401  side-effect: ensures env set
 
 
 def test_sign_and_verify_roundtrip() -> None:
@@ -14,7 +14,7 @@ def test_sign_and_verify_roundtrip() -> None:
         cert_id="01J000000000000000000TEST1",
         recipient="Dr. Ada Lovelace",
         course="ZKP Fundamentals — Part 1",
-        issued_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        issued_at=datetime(2026, 5, 13, tzinfo=UTC),
     )
     cert_id, key_id, sig = extract_signature(r.pdf_bytes)
     assert cert_id == "01J000000000000000000TEST1"
@@ -30,7 +30,7 @@ def test_tamper_detection() -> None:
         cert_id="01J000000000000000000TEST2",
         recipient="Tamper Target",
         course="X",
-        issued_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        issued_at=datetime(2026, 5, 13, tzinfo=UTC),
     )
     canonical = strip_signature(r.pdf_bytes)
     # Flip a byte somewhere in the middle of the canonical body. PDF text may be

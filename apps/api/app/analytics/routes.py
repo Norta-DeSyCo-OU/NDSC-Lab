@@ -1,7 +1,7 @@
 """Analytics routes: view event ingest + admin dashboards."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -13,12 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.analytics.models import DailyContributorAggregate, DailyItemAggregate, RawViewEvent
 from app.content.models import Item
 from app.core.db import get_session
-from app.core.policy import Actor, PolicyError, authorize
+from app.core.policy import Actor
 from app.core.redis_client import get_redis
 from app.core.security.csrf import require_csrf
 from app.core.security.rate_limit import hit
 from app.core.settings import get_settings
-from app.identity.deps import current_actor, require_admin, require_user
+from app.identity.deps import require_admin, require_user
 from app.identity.models import CookieConsent
 
 router = APIRouter(tags=["analytics"])
@@ -86,7 +86,7 @@ async def record_view(
             return Response(status_code=204)
 
     # Dedup window 30 min (FR-VIEW-004)
-    key = f"view:dedup:{actor.user_id}:{body.item_id}:{int(datetime.now(timezone.utc).timestamp() // 1800)}"
+    key = f"view:dedup:{actor.user_id}:{body.item_id}:{int(datetime.now(UTC).timestamp() // 1800)}"
     acquired = await r.set(key, "1", ex=1800, nx=True)
     if not acquired:
         return Response(status_code=204)
@@ -98,7 +98,7 @@ async def record_view(
             item_type=item.type,
             contributor_user_id=item.author_id,
             view_session_uuid=body.view_session_uuid,
-            qualifying_ts=datetime.now(timezone.utc),
+            qualifying_ts=datetime.now(UTC),
             data={"watched_s": body.watched_s, "scroll_pct": body.scroll_pct},
         )
     )

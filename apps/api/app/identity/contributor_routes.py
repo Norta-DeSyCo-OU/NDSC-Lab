@@ -1,7 +1,7 @@
 """Contributor application + role management routes."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record as audit_record
 from app.core.db import get_session
-from app.core.policy import Actor, PolicyError, authorize
+from app.core.policy import Actor
 from app.core.security.csrf import require_csrf
 from app.identity.deps import require_admin, require_user
 from app.identity.models import ContributorApplication, RoleTransition, User
@@ -50,7 +50,7 @@ async def apply(
     if open_ and open_.state == "pending":
         return ApplyOut(id=open_.id, state=open_.state)
     if open_ and open_.state == "rejected":
-        if (datetime.now(timezone.utc) - open_.created_at).days < 7:
+        if (datetime.now(UTC) - open_.created_at).days < 7:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="cooldown_active")
     app = ContributorApplication(
         user_id=user.id, motivation=body.motivation, links=body.links, state="pending"
@@ -80,7 +80,7 @@ async def decide_application(
     app.state = "approved" if body.approve else "rejected"
     app.decision_actor_id = actor.user_id
     app.decision_reason = body.reason
-    app.decided_at = datetime.now(timezone.utc)
+    app.decided_at = datetime.now(UTC)
     if body.approve:
         user = await s.scalar(select(User).where(User.id == app.user_id))
         if user:

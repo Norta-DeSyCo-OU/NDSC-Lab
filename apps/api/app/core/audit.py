@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -47,7 +47,7 @@ async def record(
     target_id: str,
     payload: dict[str, Any] | None = None,
 ) -> None:
-    ts = datetime.now(timezone.utc)
+    ts = datetime.now(UTC)
     payload = payload or {}
     canon = _canon(
         action=action,
@@ -64,7 +64,7 @@ async def record(
     prev_hmac = prev.scalar_one_or_none()
     if isinstance(prev_hmac, memoryview):
         base = prev_hmac.tobytes()
-    elif isinstance(prev_hmac, (bytes, bytearray)):
+    elif isinstance(prev_hmac, bytes | bytearray):
         base = bytes(prev_hmac)
     elif isinstance(prev_hmac, str):
         base = bytes.fromhex(prev_hmac)

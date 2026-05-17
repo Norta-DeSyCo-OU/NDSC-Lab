@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from app.content.markdown import render
+
 # Env bootstrap.
 from tests.test_argon2 import _pem  # noqa: F401
-
-from app.content.markdown import render
 
 
 def test_basic_markdown_renders() -> None:

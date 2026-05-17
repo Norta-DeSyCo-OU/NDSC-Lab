@@ -5,10 +5,10 @@ from dataclasses import dataclass
 
 import pytest
 
+from app.core.policy import Actor, PolicyError, authorize
+
 # Env bootstrap.
 from tests.test_argon2 import _pem  # noqa: F401
-
-from app.core.policy import Actor, PolicyError, authorize
 
 
 @dataclass

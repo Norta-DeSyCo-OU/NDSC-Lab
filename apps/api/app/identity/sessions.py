@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import redis.asyncio as redis
@@ -21,7 +21,7 @@ async def create_session(r: redis.Redis, user_id: str, *, ip: str | None, ua: st
     s = get_settings()
     data = {
         "user_id": user_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "ip": ip,
         "ua": ua,
     }

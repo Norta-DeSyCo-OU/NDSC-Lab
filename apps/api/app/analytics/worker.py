@@ -1,9 +1,9 @@
 """Daily aggregation + raw-event retention."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.analytics.models import DailyContributorAggregate, DailyItemAggregate, RawViewEvent
@@ -13,7 +13,7 @@ from app.core.db import session_scope
 async def reaggregate(days: int = 7) -> None:
     """Idempotent re-aggregation of trailing N days (D-17)."""
     async with session_scope() as s:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
 
         await s.execute(
             delete(DailyItemAggregate).where(DailyItemAggregate.day >= cutoff.date())
@@ -70,6 +70,6 @@ async def reaggregate(days: int = 7) -> None:
 async def purge_raw(retention_days: int = 90) -> int:
     """FR-VIEW-006: drop raw events older than retention_days. Returns rows deleted."""
     async with session_scope() as s:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
         r = await s.execute(delete(RawViewEvent).where(RawViewEvent.qualifying_ts < cutoff))
         return r.rowcount or 0

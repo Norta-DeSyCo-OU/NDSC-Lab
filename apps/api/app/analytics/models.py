@@ -1,12 +1,14 @@
 """Analytics entities: raw events + daily aggregates."""
 from __future__ import annotations
 
-from datetime import datetime, date as date_cls
+from datetime import date as date_cls
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models_base import Base

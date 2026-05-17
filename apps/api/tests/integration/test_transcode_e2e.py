@@ -8,7 +8,6 @@ stream.
 from __future__ import annotations
 
 import asyncio
-import os
 import subprocess
 import time
 
@@ -77,6 +76,7 @@ async def test_mov_upload_is_auto_transcoded_to_mp4(
     )
     # Manually enqueue the transcode (the scan-loop branch would do this).
     import os as _os
+
     import redis
 
     r2 = redis.from_url(_os.environ["REDIS_URL"])
@@ -143,6 +143,7 @@ async def test_already_mp4_is_not_transcoded(contributor: Client) -> None:
     db_exec("UPDATE attachments SET state='clean' WHERE id=%(aid)s", aid=up.json()["attachment_id"])
     # Enqueue and wait a few seconds; no transcoded attachment should appear.
     import os as _os
+
     import redis as _redis
     _redis.from_url(_os.environ["REDIS_URL"]).lpush("queue:transcode", up.json()["attachment_id"])
     await asyncio.sleep(3)

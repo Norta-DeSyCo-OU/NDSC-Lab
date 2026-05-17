@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-import subprocess
 import tempfile
-from typing import Any
 
 import aioboto3
 from sqlalchemy import select
@@ -83,7 +81,9 @@ async def transcode_one(attachment_id: str) -> None:
         # Pull via aiohttp/httpx to avoid blocking the loop on a large download.
         import httpx
 
-        async with httpx.AsyncClient(timeout=None) as c:
+        # 30-min read ceiling: large source downloads stream over time, but a
+        # hung remote should not pin the worker forever.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, read=1800.0)) as c:
             async with c.stream("GET", url) as resp:
                 resp.raise_for_status()
                 with open(in_path, "wb") as f:

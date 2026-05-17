@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
@@ -89,7 +89,7 @@ async def issue_cert(
         cert_id=cert.id,
         recipient=user.display_name or user.email,
         course=body.course_title,
-        issued_at=cert.issued_at or datetime.now(timezone.utc),
+        issued_at=cert.issued_at or datetime.now(UTC),
     )
     cert.signature_b64 = rendered.signature_b64
 
@@ -131,7 +131,7 @@ async def revoke_cert(
     if not cert:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     if cert.revoked_at is None:
-        cert.revoked_at = datetime.now(timezone.utc)
+        cert.revoked_at = datetime.now(UTC)
         cert.revoke_reason = body.reason
         await audit_record(
             s,

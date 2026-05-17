@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.content.models import Category, Item, Tag
+from app.content.models import Item
 from app.content.service import ContentError, create_draft, submit_for_review, update_draft
 from app.core.db import get_session
 from app.core.policy import Actor, PolicyError, authorize

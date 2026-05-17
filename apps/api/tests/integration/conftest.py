@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from typing import Iterator
+from collections.abc import Iterator
 
 import httpx
 import psycopg2

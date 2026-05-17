@@ -1,10 +1,10 @@
 """Curation routes: profiles, collections, courses, workshops."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, HttpUrl
 from sqlalchemy import select
@@ -14,7 +14,7 @@ from app.content.models import Attachment
 from app.content.slug import is_reserved, normalize_slug
 from app.core.audit import record as audit_record
 from app.core.db import get_session
-from app.core.policy import Actor, PolicyError, authorize
+from app.core.policy import Actor
 from app.core.security.csrf import require_csrf
 from app.curation.models import (
     Collection,
@@ -108,7 +108,7 @@ async def upsert_profile(
     if body.orcid is not None:
         profile.orcid = body.orcid
     if body.links is not None:
-        profile.links = [{"label": l.label, "url": str(l.url)} for l in body.links]
+        profile.links = [{"label": ln.label, "url": str(ln.url)} for ln in body.links]
     if body.contacts is not None:
         profile.contacts = [
             {"kind": c.kind, "value": c.value, "label": c.label} for c in body.contacts
@@ -220,12 +220,12 @@ async def upload_profile_photo(
     r2_key = f"users/{actor.user_id}/profile_photo/{_secrets.token_hex(4)}_{safe_name}"
 
     sess = aioboto3.Session()
-    s3_kwargs = dict(
-        endpoint_url=settings.r2_endpoint_url,
-        region_name=settings.r2_region,
-        aws_access_key_id=settings.r2_access_key_id.get_secret_value(),
-        aws_secret_access_key=settings.r2_secret_access_key.get_secret_value(),
-    )
+    s3_kwargs = {
+        "endpoint_url": settings.r2_endpoint_url,
+        "region_name": settings.r2_region,
+        "aws_access_key_id": settings.r2_access_key_id.get_secret_value(),
+        "aws_secret_access_key": settings.r2_secret_access_key.get_secret_value(),
+    }
 
     # Drop the previous photo's R2 object + attachment row (best-effort).
     old_att_id = profile.photo_attachment_id
@@ -646,7 +646,7 @@ async def _owner_slug_map(s: AsyncSession, owner_ids: list[str]) -> dict[str, st
             )
         )
     ).all()
-    return {uid: slug for uid, slug in rows}
+    return dict(rows)
 
 
 @router.get("/collections", response_model=list[CollectionOut])
@@ -989,7 +989,7 @@ async def list_workshops(
 ) -> list[WorkshopOut]:
     q = select(Workshop).where(Workshop.state == "published")
     if upcoming_only:
-        q = q.where(Workshop.starts_at >= datetime.now(timezone.utc))
+        q = q.where(Workshop.starts_at >= datetime.now(UTC))
     q = q.order_by(Workshop.starts_at)
     rows = (await s.scalars(q)).all()
     out: list[WorkshopOut] = []
