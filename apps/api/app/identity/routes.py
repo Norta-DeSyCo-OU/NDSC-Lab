@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
 from app.core.redis_client import get_redis
+from app.core.security import activity_alerts
 from app.core.security.csrf import issue_csrf, require_csrf
 from app.core.security.signup_flood import SignupCooldownError
 from app.core.security.signup_flood import check_and_record as signup_flood_check
@@ -53,6 +54,9 @@ async def signup_endpoint(
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
     r = await get_redis()
+    # Track every attempt (pre-cooldown) so the alerts module sees the burst,
+    # not just the ones that survive the flood limiter.
+    await activity_alerts.record(r, "signup")
     try:
         await signup_flood_check(r, s, ip=ip, ua=ua)
     except SignupCooldownError as e:
@@ -107,6 +111,9 @@ async def login_endpoint(
             s, email=body.email, password=body.password, ip=ip, ua=ua
         )
     except LoginError as e:
+        # Count failed-login bursts so the alerts module catches credential-spray.
+        r2 = await get_redis()
+        await activity_alerts.record(r2, "failed_login")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="invalid_credentials") from e
 
     r = await get_redis()

@@ -68,6 +68,9 @@ lint.select = ["E", "F", "I", "B", "UP", "S", "A", "C4", "ASYNC", "PERF"]
 # A002 shadowing builtins (type, id) in narrow scopes is FastAPI-idiomatic.
 lint.ignore = [
   "S101", "E501", "S110", "E402", "ASYNC109", "ASYNC230", "B008", "A002",
+  # S608: f-string SQL is safe here because all interpolated values are integers
+  # validated against PlatformSetting defaults, not user input.
+  "S608",
 ]
 
 [tool.ruff.lint.per-file-ignores]

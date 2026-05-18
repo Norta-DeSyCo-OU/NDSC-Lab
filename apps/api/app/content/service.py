@@ -134,6 +134,15 @@ async def approve_publish(
         target_id=item.id,
         payload={"author_id": item.author_id},
     )
+    # Sliding-window event for admin activity alerts (non-blocking, best effort).
+    try:
+        from app.core.redis_client import get_redis
+        from app.core.security import activity_alerts
+
+        r = await get_redis()
+        await activity_alerts.record(r, "item_publish")
+    except Exception:
+        pass
 
 
 async def admin_unpublish(

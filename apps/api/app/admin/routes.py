@@ -189,3 +189,43 @@ async def signup_flood_clear(
         payload={},
     )
     return {"ok": "cleared"}
+
+
+# --- activity alerts ------------------------------------------------------
+
+
+@router.get("/alerts")
+async def alerts_status(
+    actor: Annotated[Actor, Depends(require_admin)],
+    s: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, Any]:
+    from app.core.security import activity_alerts
+
+    r = await get_redis()
+    return await activity_alerts.status(r, s)
+
+
+@router.post("/alerts/clear-cooldown")
+async def alerts_clear_cooldown(
+    request: Request,
+    actor: Annotated[Actor, Depends(require_admin)],
+    event: str | None = None,
+) -> dict[str, str]:
+    require_csrf(request)
+    from app.core.security import activity_alerts
+
+    r = await get_redis()
+    await activity_alerts.clear_cooldown(r, event=event)
+    return {"ok": "cleared", "event": event or "all"}
+
+
+@router.post("/digest/send-now")
+async def digest_send_now(
+    request: Request,
+    actor: Annotated[Actor, Depends(require_admin)],
+) -> dict[str, str]:
+    """Force the digest loop to re-send on its next wake by clearing the marker."""
+    require_csrf(request)
+    r = await get_redis()
+    await r.delete("digest:last_sent")
+    return {"ok": "marker_cleared"}
