@@ -7,7 +7,11 @@ from typing import Annotated
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 PASSWORD_MIN = 12
-_PASSWORD_RE = re.compile(r"^[\x21-\x7E ]{12,256}$")  # printable ASCII + space, 12-256
+# Allow any Unicode character except ASCII control bytes (NUL through US, plus
+# DEL). Lets users pick accented letters, smart quotes from mobile autocorrect,
+# emoji — Argon2id hashes the UTF-8 byte sequence regardless. Length cap is
+# enforced separately by Field(min_length=PASSWORD_MIN, max_length=256).
+_PASSWORD_RE = re.compile(r"^[^\x00-\x1F\x7F]{12,256}$")
 
 
 class SignupIn(BaseModel):
