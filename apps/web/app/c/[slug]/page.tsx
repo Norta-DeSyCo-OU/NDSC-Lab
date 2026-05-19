@@ -4,6 +4,7 @@ import { apiUrl } from "@/lib/api";
 type Profile = {
   user_id: string;
   slug: string;
+  display_name: string | null;
   bio_md: string | null;
   affiliation: string | null;
   orcid: string | null;
@@ -158,14 +159,19 @@ export default async function ContributorPage({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={profile.photo_url}
-                alt={`Profile photo of ${profile.slug}`}
+                alt={`Profile photo of ${profile.display_name ?? profile.slug}`}
                 width={96}
                 height={96}
                 className="w-24 h-24 rounded-full object-cover border border-[var(--color-brand-blue-4)] shrink-0"
               />
             )}
             <div className="min-w-0">
-              <h1 className="text-3xl font-bold">{profile.slug}</h1>
+              <h1 className="text-3xl font-bold">{profile.display_name ?? profile.slug}</h1>
+              {profile.display_name && (
+                <p className="text-xs text-[var(--color-brand-cyan)] font-mono mt-0.5">
+                  @{profile.slug}
+                </p>
+              )}
               {profile.affiliation && (
                 <p className="text-[var(--color-fg-muted)] text-sm mt-1">{profile.affiliation}</p>
               )}

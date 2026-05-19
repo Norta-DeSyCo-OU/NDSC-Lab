@@ -31,6 +31,7 @@ router = APIRouter(tags=["self"])
 class MyProfileOut(BaseModel):
     user_id: str
     slug: str | None
+    display_name: str | None
     bio_md: str | None
     affiliation: str | None
     orcid: str | None
@@ -52,6 +53,7 @@ async def my_profile(
     return MyProfileOut(
         user_id=user.id,
         slug=p.slug if p else None,
+        display_name=user.display_name,
         bio_md=p.bio_md if p else None,
         affiliation=p.affiliation if p else None,
         orcid=p.orcid if p else None,

@@ -9,6 +9,7 @@ import { FilePicker } from "@/components/FilePicker";
 type Profile = {
   user_id: string;
   slug: string | null;
+  display_name: string | null;
   bio_md: string | null;
   affiliation: string | null;
   orcid: string | null;
@@ -37,6 +38,7 @@ function csrfCookie(): string {
 export default function ProfileEditor() {
   const [p, setP] = useState<Profile | null>(null);
   const [slug, setSlug] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [aff, setAff] = useState("");
   const [orcid, setOrcid] = useState("");
@@ -65,6 +67,7 @@ export default function ProfileEditor() {
       const prof = await apiGet<Profile>("/me/profile");
       setP(prof);
       setSlug(prof.slug ?? "");
+      setDisplayName(prof.display_name ?? "");
       setBio(prof.bio_md ?? "");
       setAff(prof.affiliation ?? "");
       setOrcid(prof.orcid ?? "");
@@ -112,6 +115,7 @@ export default function ProfileEditor() {
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
         body: JSON.stringify({
           slug: slug || null,
+          display_name: displayName || null,
           bio_md: bio || null,
           affiliation: aff || null,
           orcid: orcid || null,
@@ -315,6 +319,23 @@ export default function ProfileEditor() {
           Identity
         </h2>
         <form onSubmit={save} className="space-y-3">
+          <div className="space-y-1">
+            <label htmlFor="display-name" className="block text-sm">
+              Display name
+            </label>
+            <input
+              id="display-name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={120}
+              placeholder="e.g. Sowelu Avanzo"
+              className="w-full px-3 py-2 rounded bg-[var(--color-bg-base)] border border-[var(--color-brand-blue-4)]"
+            />
+            <p className="text-xs text-[var(--color-fg-muted)]">
+              Shown on the contributors directory, your public page header, and item bylines. Free-form (capitals, spaces, accents). Leave blank to fall back to your handle.
+            </p>
+          </div>
+
           <div className="space-y-1">
             <label htmlFor="slug" className="block text-sm">
               Page handle <span className="text-red-300">*</span>

@@ -45,6 +45,7 @@ class ProfileContact(BaseModel):
 
 class ProfileIn(BaseModel):
     slug: str | None = None
+    display_name: str | None = Field(default=None, max_length=120)
     bio_md: str | None = Field(default=None, max_length=8000)
     affiliation: str | None = Field(default=None, max_length=200)
     orcid: str | None = Field(default=None, pattern=r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
@@ -55,6 +56,7 @@ class ProfileIn(BaseModel):
 class ProfileOut(BaseModel):
     user_id: str
     slug: str
+    display_name: str | None = None
     bio_md: str | None
     affiliation: str | None
     orcid: str | None
@@ -120,6 +122,11 @@ async def upsert_profile(
             if not taken:
                 profile.slug = new_slug
 
+    if body.display_name is not None:
+        user = await s.scalar(select(User).where(User.id == profile.user_id))
+        if user:
+            cleaned = body.display_name.strip()
+            user.display_name = cleaned or None
     if body.bio_md is not None:
         profile.bio_md = body.bio_md
     if body.affiliation is not None:
@@ -133,9 +140,11 @@ async def upsert_profile(
             {"kind": c.kind, "value": c.value, "label": c.label} for c in body.contacts
         ]
 
+    owner_user = await s.scalar(select(User).where(User.id == profile.user_id))
     return ProfileOut(
         user_id=profile.user_id,
         slug=profile.slug,
+        display_name=(owner_user.display_name if owner_user else None),
         bio_md=profile.bio_md,
         affiliation=profile.affiliation,
         orcid=profile.orcid,
@@ -159,6 +168,7 @@ async def get_profile(
     return ProfileOut(
         user_id=profile.user_id,
         slug=profile.slug,
+        display_name=user.display_name,
         bio_md=profile.bio_md,
         affiliation=profile.affiliation,
         orcid=profile.orcid,
