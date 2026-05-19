@@ -67,6 +67,34 @@ def _photo_url_for(profile: ContributorProfile) -> str | None:
     return f"/api/c/photo/{profile.user_id}" if profile.photo_attachment_id else None
 
 
+async def _get_or_create_profile(
+    s: AsyncSession, user_id: str, slug_hint: str | None = None
+) -> ContributorProfile:
+    """Return the actor's profile row, creating it lazily on first use.
+
+    Mirrors the slug-allocation logic of `upsert_profile` so any endpoint
+    that needs a profile (photo upload, sections…) can be invoked before
+    the user has ever pressed "Save" on the profile form.
+    """
+    profile = await s.scalar(
+        select(ContributorProfile).where(ContributorProfile.user_id == user_id)
+    )
+    if profile:
+        return profile
+    slug = normalize_slug(slug_hint or user_id or "user")
+    if is_reserved(slug):
+        slug = f"{slug}-c"
+    base = slug
+    n = 0
+    while await s.scalar(select(ContributorProfile).where(ContributorProfile.slug == slug)):
+        n += 1
+        slug = f"{base}-{n}"
+    profile = ContributorProfile(user_id=user_id, slug=slug)  # type: ignore[arg-type]
+    s.add(profile)
+    await s.flush()
+    return profile
+
+
 @router.put("/me/profile", response_model=ProfileOut)
 async def upsert_profile(
     body: ProfileIn,
@@ -78,23 +106,14 @@ async def upsert_profile(
     if actor.role not in ("contributor", "admin"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="contributor_required")
 
-    profile = await s.scalar(
+    existed = await s.scalar(
         select(ContributorProfile).where(ContributorProfile.user_id == actor.user_id)
     )
-    if not profile:
-        slug = normalize_slug(body.slug or actor.user_id or "user")  # type: ignore[arg-type]
-        if is_reserved(slug):
-            slug = f"{slug}-c"
-        # uniqueness
-        n = 0
-        base = slug
-        while await s.scalar(select(ContributorProfile).where(ContributorProfile.slug == slug)):
-            n += 1
-            slug = f"{base}-{n}"
-        profile = ContributorProfile(user_id=actor.user_id, slug=slug)  # type: ignore[arg-type]
-        s.add(profile)
-        await s.flush()
-    elif body.slug:
+    if not existed:
+        profile = await _get_or_create_profile(s, actor.user_id, slug_hint=body.slug)  # type: ignore[arg-type]
+    else:
+        profile = existed
+    if existed and body.slug:
         new_slug = normalize_slug(body.slug)
         if new_slug != profile.slug and not is_reserved(new_slug):
             taken = await s.scalar(select(ContributorProfile).where(ContributorProfile.slug == new_slug))
@@ -190,11 +209,11 @@ async def upload_profile_photo(
     if len(body) > MAX_PHOTO_BYTES:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="photo_too_large")
 
+    # Look up — but do NOT create — the profile row yet, so a failed
+    # ClamAV/R2 upload never leaves an empty profile in the public directory.
     profile = await s.scalar(
         select(ContributorProfile).where(ContributorProfile.user_id == actor.user_id)
     )
-    if not profile:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="profile_not_initialized")
 
     # Optional ClamAV scan inline — fast for ≤5 MB.
     try:
@@ -228,8 +247,8 @@ async def upload_profile_photo(
     }
 
     # Drop the previous photo's R2 object + attachment row (best-effort).
-    old_att_id = profile.photo_attachment_id
-    if old_att_id:
+    old_att_id = profile.photo_attachment_id if profile else None
+    if old_att_id and profile:
         old_att = await s.scalar(select(Attachment).where(Attachment.id == old_att_id))
         if old_att:
             try:
@@ -247,6 +266,10 @@ async def upload_profile_photo(
         await c.put_object(
             Bucket=settings.r2_hot_bucket, Key=r2_key, Body=body, ContentType=mime
         )
+
+    # R2 put succeeded — only now lazily create the profile row if missing.
+    if not profile:
+        profile = await _get_or_create_profile(s, actor.user_id)  # type: ignore[arg-type]
 
     att = Attachment(
         owner_user_id=actor.user_id,  # type: ignore[arg-type]
@@ -380,11 +403,7 @@ async def create_section(
     require_csrf(request)
     if actor.role not in ("contributor", "admin"):
         raise HTTPException(status.HTTP_403_FORBIDDEN)
-    profile = await s.scalar(
-        select(ContributorProfile).where(ContributorProfile.user_id == actor.user_id)
-    )
-    if not profile:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="profile_not_initialized")
+    await _get_or_create_profile(s, actor.user_id)  # type: ignore[arg-type]
     sec = ProfileSection(
         profile_user_id=actor.user_id,  # type: ignore[arg-type]
         title=body.title,
