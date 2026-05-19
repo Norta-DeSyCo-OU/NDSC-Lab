@@ -915,11 +915,20 @@ async def reorder_collection_items(
     actor: Annotated[Actor, Depends(require_user)],
     s: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, bool]:
-    """Set the position of every item in the collection in one atomic update.
+    """Set the position of the listed items in one atomic update.
 
-    The payload must list **exactly** the set of item ids currently in the
-    collection — the endpoint will not add or remove rows. Positions are
-    assigned 0..N-1 in the order given.
+    The payload may list **a subset** of the items currently in the
+    collection (the editor only knows about items that the public
+    detail endpoint surfaces; tombstoned siblings and drafts the
+    caller cannot see stay in the DB). Listed items are assigned
+    positions 0..K-1 in the given order. Any unlisted items keep
+    their relative order and are placed immediately after, at
+    positions K..N-1.
+
+    Errors:
+        * 400 duplicate_item_id — same id appears twice in payload.
+        * 400 unknown_item_id   — payload references an item that is
+          not in this collection at all (stale UI / IDOR attempt).
     """
     require_csrf(request)
     coll = await s.scalar(select(Collection).where(Collection.id == collection_id))
@@ -937,10 +946,19 @@ async def reorder_collection_items(
     payload_ids = body.item_ids
     if len(payload_ids) != len(set(payload_ids)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="duplicate_item_id")
-    if set(payload_ids) != set(by_id.keys()):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="item_set_mismatch")
+    listed_set = set(payload_ids)
+    unknown = listed_set - set(by_id.keys())
+    if unknown:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="unknown_item_id")
+
     for pos, item_id in enumerate(payload_ids):
         by_id[item_id].position = pos
+    # Unlisted (tombstoned / out-of-scope) items preserve their relative
+    # order — sort by current position then pack right after the listed ones.
+    others = [r for r in rows if r.item_id not in listed_set]
+    others.sort(key=lambda r: r.position)
+    for offset, r in enumerate(others, start=len(payload_ids)):
+        r.position = offset
     return {"ok": True}
 
 
