@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiGet, apiPost, ApiError } from "@/lib/api";
+import { apiGet, apiPost, apiPut, ApiError } from "@/lib/api";
 import { Alert } from "@/components/Alert";
 
 type CollectionDetail = {
@@ -106,6 +106,37 @@ export default function CollectionEdit({ params }: { params: Promise<{ id: strin
     } catch (e) {
       setErr(String(e));
     }
+  }
+
+  async function reorder(nextIds: string[]) {
+    if (!coll) return;
+    const prev = coll.items;
+    // Optimistic update so the UI reacts immediately, then reconcile from server.
+    setColl({
+      ...coll,
+      items: nextIds
+        .map((id) => prev.find((p) => p.id === id))
+        .filter((x): x is CollectionDetail["items"][number] => !!x)
+        .map((it, i) => ({ ...it, position: i })),
+    });
+    setErr(null);
+    try {
+      await apiPut(`/collections/${id}/items/order`, { item_ids: nextIds });
+      await load();
+    } catch (e) {
+      // Roll back optimistic order on failure.
+      setColl({ ...coll, items: prev });
+      setErr(e instanceof ApiError ? e.code : String(e));
+    }
+  }
+
+  function moveItem(index: number, delta: -1 | 1) {
+    if (!coll) return;
+    const next = coll.items.map((it) => it.id);
+    const j = index + delta;
+    if (j < 0 || j >= next.length) return;
+    [next[index], next[j]] = [next[j], next[index]];
+    reorder(next);
   }
 
   async function setRule(item_id: string, rule: Record<string, unknown>) {
@@ -225,24 +256,48 @@ export default function CollectionEdit({ params }: { params: Promise<{ id: strin
           </p>
         ) : (
           <ol className="space-y-2 list-decimal pl-6">
-            {coll.items.map((it) => (
+            {coll.items.map((it, idx) => (
               <li
                 key={it.id}
                 className="border border-[var(--color-brand-blue-4)] bg-[var(--color-bg-panel)] rounded p-3 space-y-2"
               >
                 <div className="flex flex-wrap items-baseline gap-3 justify-between">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-[var(--color-brand-cyan)]">
-                      {it.type.replace("_", " ")} · {it.state}
+                  <div className="flex items-start gap-2">
+                    <div className="flex flex-col -mt-1" aria-label="Reorder">
+                      <button
+                        type="button"
+                        onClick={() => moveItem(idx, -1)}
+                        disabled={idx === 0}
+                        aria-label={`Move "${it.title}" up`}
+                        title="Move up"
+                        className="px-1 leading-none text-[var(--color-brand-cyan)] disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveItem(idx, 1)}
+                        disabled={idx === coll.items.length - 1}
+                        aria-label={`Move "${it.title}" down`}
+                        title="Move down"
+                        className="px-1 leading-none text-[var(--color-brand-cyan)] disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        ▼
+                      </button>
                     </div>
-                    <Link href={`/me/content/${it.id}/edit`} className="font-semibold">
-                      {it.title}
-                    </Link>
-                    {coll.is_course && (
-                      <span className="ml-2 text-xs text-[var(--color-fg-muted)]">
-                        {it.is_required_for_course ? "Required" : "Optional"}
-                      </span>
-                    )}
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-[var(--color-brand-cyan)]">
+                        {it.type.replace("_", " ")} · {it.state}
+                      </div>
+                      <Link href={`/me/content/${it.id}/edit`} className="font-semibold">
+                        {it.title}
+                      </Link>
+                      {coll.is_course && (
+                        <span className="ml-2 text-xs text-[var(--color-fg-muted)]">
+                          {it.is_required_for_course ? "Required" : "Optional"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <button
                     type="button"

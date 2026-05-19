@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { apiUrl } from "@/lib/api";
 import { Comments } from "@/components/Comments";
 import { ItemViewBeacon } from "@/components/ItemViewBeacon";
@@ -23,7 +24,16 @@ type Item = {
 };
 
 async function fetchItem(id: string): Promise<Item | null> {
-  const r = await fetch(apiUrl(`/items/${id}`), { cache: "no-store" });
+  // Forward the caller's session cookie so the backend can apply the
+  // owner / admin draft-read policy. Without this the SSR fetch hits the
+  // backend as anonymous and items in `pending_review`/`draft` return 404,
+  // so admins reviewing the queue cannot open the item page at all.
+  const h = await headers();
+  const cookie = h.get("cookie") ?? "";
+  const r = await fetch(apiUrl(`/items/${id}`), {
+    cache: "no-store",
+    headers: cookie ? { Cookie: cookie } : undefined,
+  });
   if (!r.ok) return null;
   return (await r.json()) as Item;
 }

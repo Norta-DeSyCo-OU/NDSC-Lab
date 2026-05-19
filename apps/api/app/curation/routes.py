@@ -903,6 +903,47 @@ async def remove_collection_item(
     return {"ok": True}
 
 
+class CollectionReorderIn(BaseModel):
+    item_ids: list[str] = Field(min_length=1, max_length=500)
+
+
+@router.put("/collections/{collection_id}/items/order")
+async def reorder_collection_items(
+    collection_id: str,
+    body: CollectionReorderIn,
+    request: Request,
+    actor: Annotated[Actor, Depends(require_user)],
+    s: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, bool]:
+    """Set the position of every item in the collection in one atomic update.
+
+    The payload must list **exactly** the set of item ids currently in the
+    collection — the endpoint will not add or remove rows. Positions are
+    assigned 0..N-1 in the order given.
+    """
+    require_csrf(request)
+    coll = await s.scalar(select(Collection).where(Collection.id == collection_id))
+    if not coll:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if coll.owner_user_id != actor.user_id and actor.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+
+    rows = (
+        await s.scalars(
+            select(CollectionItem).where(CollectionItem.collection_id == collection_id)
+        )
+    ).all()
+    by_id = {r.item_id: r for r in rows}
+    payload_ids = body.item_ids
+    if len(payload_ids) != len(set(payload_ids)):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="duplicate_item_id")
+    if set(payload_ids) != set(by_id.keys()):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="item_set_mismatch")
+    for pos, item_id in enumerate(payload_ids):
+        by_id[item_id].position = pos
+    return {"ok": True}
+
+
 class CompletionRuleIn(BaseModel):
     rule: dict[str, Any] = Field(
         description="JSON shape: {'video_pct': 0..1} | {'article_scroll_pct': 0..1} | {'file_downloaded': true}"
