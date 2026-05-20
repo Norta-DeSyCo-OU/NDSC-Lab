@@ -62,6 +62,7 @@ ALLOWED_DOC_MIME = {
 }
 
 
+
 class CreateUploadIn(BaseModel):
     item_id: str
     role: str = Field(pattern="^(video_primary|article_attachment|teaching_material_file|profile_photo)$")
@@ -406,6 +407,40 @@ async def delete_attachment(
     return {"ok": True}
 
 
+async def _authorize_attachment_read(
+    att: Attachment, actor: Actor, s: AsyncSession
+) -> None:
+    """Single source of truth for reading attachment *bytes* (stream + url).
+
+    Decision tree:
+      * Owner / admin: always allowed (incl. `scanning` state, for preview).
+      * `clean` attachment of a `published` item: any authenticated account
+        (User / Contributor / Admin). Anonymous → 401 `login_required`.
+      * Anything else (draft/pending/quarantined item, non-clean
+        attachment, missing parent): 404, with no existence leak.
+
+    The content gate (amended FR-VIDEO-006, 2026-05-20): item / collection /
+    author pages and article body text stay public, but the consumable
+    payload behind an attachment requires login.
+    """
+    is_owner = actor.user_id is not None and actor.user_id == att.owner_user_id
+    is_admin = actor.role == "admin"
+    if is_owner or is_admin:
+        return
+    # `login_would_help` separates "exists publicly, just needs an account"
+    # (→ 401) from "you should not learn this exists" (→ 404, no leak).
+    login_would_help = False
+    if att.item_id and att.state == "clean":
+        parent = await s.scalar(select(Item).where(Item.id == att.item_id))
+        if parent and parent.state == "published":
+            if actor.user_id is not None:
+                return
+            login_would_help = True
+    if login_would_help:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="login_required")
+    raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+
 @router.get("/{attachment_id}/stream")
 async def stream_attachment(
     attachment_id: str,
@@ -415,9 +450,7 @@ async def stream_attachment(
 ):
     """Stream a clean attachment via the API, supporting HTTP Range.
 
-    Access: public when parent item is `published` AND attachment is `clean`.
-    Owner / admin otherwise (so contributors can preview their own uploads
-    while still in scanning state).
+    Access policy: see `_authorize_attachment_read`.
     """
     from fastapi.responses import StreamingResponse
 
@@ -425,15 +458,7 @@ async def stream_attachment(
     if not att or att.state == "deleted":
         raise HTTPException(status.HTTP_404_NOT_FOUND)
 
-    is_owner = actor.user_id == att.owner_user_id
-    is_admin = actor.role == "admin"
-    public_ok = False
-    if att.item_id and att.state == "clean":
-        parent = await s.scalar(select(Item).where(Item.id == att.item_id))
-        if parent and parent.state == "published":
-            public_ok = True
-    if not (public_ok or is_owner or is_admin):
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    await _authorize_attachment_read(att, actor, s)
 
     settings = get_settings()
     range_header = request.headers.get("range")
@@ -499,11 +524,17 @@ async def signed_url(
     actor: Annotated[Actor, Depends(require_user)],
     s: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, str]:
+    """Return a short-lived presigned R2 URL for an attachment.
+
+    Uses the same read-authorization as `stream_attachment` so this cannot
+    become a side door around the content gate (previously any authenticated
+    user could presign any `clean` attachment, including other contributors'
+    unpublished drafts).
+    """
     att = await s.scalar(select(Attachment).where(Attachment.id == attachment_id))
     if not att or att.state == "deleted":
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    if att.state != "clean" and att.owner_user_id != actor.user_id and actor.role != "admin":
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    await _authorize_attachment_read(att, actor, s)
     url = await presign_get(att.r2_key, expires=3600)
     return {"url": url}
 

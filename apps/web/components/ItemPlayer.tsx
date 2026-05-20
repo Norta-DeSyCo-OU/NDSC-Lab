@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useMe } from "@/lib/useMe";
 
 type Attachment = {
   id: string;
@@ -25,12 +27,59 @@ function embedSrc(externalUrl: string | null): string | null {
 }
 
 /**
+ * Gate shown to anonymous visitors in place of the consumable payload
+ * (video player, downloadable files). Item metadata + article body stay
+ * public; only the payload sits behind login. Mirrors the server-side
+ * gate in `uploads.stream_attachment` — this is UX, not the security
+ * boundary (the API still 401s an anonymous stream request).
+ */
+function LoginGate({ message }: { message: string }) {
+  const pathname = usePathname();
+  const next = encodeURIComponent(pathname || "/");
+  return (
+    <div className="border border-[var(--color-brand-blue-4)] bg-[var(--color-bg-panel)] rounded-lg p-8 text-center space-y-4">
+      <div>
+        <p className="font-semibold">{message}</p>
+        <p className="text-sm text-[var(--color-fg-muted)] mt-1">
+          This content is available to registered members. Creating an account is free.
+        </p>
+      </div>
+      <div className="flex gap-2 justify-center">
+        <a
+          href={`/auth/login?next=${next}`}
+          className="px-4 py-2 bg-[var(--color-brand-cyan)] text-black rounded text-sm font-medium"
+        >
+          Log in
+        </a>
+        <a
+          href={`/auth/signup?next=${next}`}
+          className="px-4 py-2 border border-[var(--color-brand-blue-4)] rounded text-sm"
+        >
+          Sign up
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function PlayerSkeleton() {
+  return (
+    <div className="border border-[var(--color-brand-blue-4)] bg-[var(--color-bg-panel)] rounded p-4 text-sm text-[var(--color-fg-muted)]">
+      Loading…
+    </div>
+  );
+}
+
+/**
  * Renders the appropriate player for an item:
  * - hosted video: `<video controls>` pointing to /api/uploads/<id>/stream
  *   (HTTP-Range proxied through the api → R2/MinIO).
  * - embed video: cookie-light embed if recognized; otherwise click-to-play
  *   placeholder linking to the external URL (D-09 third-party cookie consent).
  * - teaching material: lists downloadable attachments.
+ *
+ * Consumable payload (video playback, file downloads, embed players) is
+ * gated behind login; anonymous visitors get a `<LoginGate>` instead.
  */
 export function ItemPlayer({
   itemId,
@@ -46,6 +95,8 @@ export function ItemPlayer({
   // `null` = SSR / fetch in flight, `[]` = fetched and empty.
   const [atts, setAtts] = useState<Attachment[] | null>(null);
   const [revealEmbed, setRevealEmbed] = useState(false);
+  const { me, loading: meLoading } = useMe();
+  const authed = !!me;
 
   useEffect(() => {
     fetch(`/api/items/${itemId}/attachments`, { credentials: "include" })
@@ -65,6 +116,12 @@ export function ItemPlayer({
         </p>
       </div>
     );
+  }
+
+  // ---- Content gate: video playback requires login --------------------------
+  if (itemType === "video") {
+    if (meLoading) return <PlayerSkeleton />;
+    if (!authed) return <LoginGate message="Log in to watch this video." />;
   }
 
   if (itemType === "video" && videoKind === "embed") {
@@ -190,6 +247,8 @@ export function ItemPlayer({
   }
 
   if (itemType === "teaching_material") {
+    if (meLoading) return <PlayerSkeleton />;
+    if (!authed) return <LoginGate message="Log in to download this teaching material." />;
     const files = (atts ?? []).filter(
       (a) => a.role === "teaching_material_file" && a.state === "clean",
     );
@@ -236,6 +295,8 @@ export function ItemPlayer({
   // article — show downloadable attachments below the body, if any.
   const arts = (atts ?? []).filter((a) => a.role === "article_attachment" && a.state === "clean");
   if (arts.length === 0) return null;
+  if (meLoading) return <PlayerSkeleton />;
+  if (!authed) return <LoginGate message="Log in to download the attachments for this article." />;
   return (
     <section className="border border-[var(--color-brand-blue-4)] bg-[var(--color-bg-panel)] rounded p-4 space-y-2">
       <h2 className="font-semibold text-sm">Attachments</h2>

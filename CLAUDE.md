@@ -88,6 +88,7 @@ The development of this project follows a structured waterfall methodology, defi
 - 2026-05-13 — Analytics retention: raw events 90 d, aggregates indefinite — `FR-VIEW-006`.
 - 2026-05-13 — Audit log retention: default 365 d, admin-extendable — `FR-ADMIN-003`, `FR-ADMIN-009`.
 - 2026-05-13 — NFR targets: P95 page 800 ms / video first-frame 3 s / uptime 99% / RPO 24 h / RTO 4 h — `NFR-PERF-001..005`, `NFR-AVAIL-001..005`.
+- 2026-05-20 — **Content gate**: consumable payload (hosted-video playback, teaching-material/article file downloads, embed-video player) requires an authenticated account (any role: User/Contributor/Admin). Item/collection/author/workshop pages, article body text, and thumbnails stay public for discovery. Enforced server-side at `/uploads/{id}/stream` + `/uploads/{id}/url` (`401 login_required` for anonymous) and by withholding `external_url` from anonymous `GET /items`. — sponsor decision; amends `FR-VIDEO-006` — `docs/01_requirements.md`.
 
 ## 5. File map
 

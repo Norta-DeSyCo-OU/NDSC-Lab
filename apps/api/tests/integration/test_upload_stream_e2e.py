@@ -1,12 +1,14 @@
 """End-to-end upload → scan → publish → stream workflow.
 
-Exercises FR-VIDEO-001..002 + FR-TM-001..002 + FR-CONTENT-005:
+Exercises FR-VIDEO-001..002 + FR-TM-001..002 + FR-CONTENT-005 + the
+2026-05-20 content gate (amended FR-VIDEO-006):
 1. Contributor creates a hosted-video item.
 2. Uploads a small `.mp4` payload via /uploads/simple.
 3. Worker scans (clean / mocked stub if clamav unreachable).
 4. Contributor submits for review.
 5. Admin approves → published.
-6. Public stream URL serves the bytes (HTTP 200 / partial 206 with Range).
+6. Anonymous stream request is rejected (HTTP 401 `login_required`).
+7. Authenticated viewer streams the bytes (HTTP 200 / partial 206 with Range).
 """
 from __future__ import annotations
 
@@ -42,7 +44,9 @@ async def _wait_clean(att_id: str, timeout: float = 30.0) -> None:
 
 
 @pytest.mark.asyncio
-async def test_video_upload_to_streaming_end_to_end(contributor: Client, admin: Client) -> None:
+async def test_video_upload_to_streaming_end_to_end(
+    contributor: Client, admin: Client, user: Client,
+) -> None:
     # 1. Create hosted-video item.
     r = await contributor.post(
         "/items",
@@ -83,7 +87,8 @@ async def test_video_upload_to_streaming_end_to_end(contributor: Client, admin: 
     r3 = await admin.post(f"/admin/items/{iid}/approve", json={})
     assert r3.status_code == 200, r3.text
 
-    # 5. Public listing of attachments shows the clean video with a stream URL.
+    # 5. Listing of attachments still shows the clean video metadata to
+    #    anonymous callers (so the item page can render a "log in" prompt).
     async with httpx.AsyncClient(base_url=BASE) as anon:
         list_r = await anon.get(f"/items/{iid}/attachments")
         assert list_r.status_code == 200, list_r.text
@@ -92,21 +97,26 @@ async def test_video_upload_to_streaming_end_to_end(contributor: Client, admin: 
         assert len(primary) == 1
         stream_path = primary[0]["stream_url"].replace("/api", "")  # strip Caddy prefix → api path
 
-        # 6. Full GET returns 200 + bytes match.
-        full = await anon.get(stream_path)
-        assert full.status_code == 200, full.text
-        assert full.content == MP4_BYTES
-        assert full.headers.get("accept-ranges") == "bytes"
+        # 6. Content gate: anonymous stream request is rejected with 401.
+        anon_stream = await anon.get(stream_path)
+        assert anon_stream.status_code == 401, anon_stream.text
+        assert anon_stream.json().get("detail") == "login_required"
 
-        # 7. Range request returns 206 + partial bytes.
-        rng = await anon.get(stream_path, headers={"Range": "bytes=0-15"})
-        assert rng.status_code == 206
-        assert rng.content == MP4_BYTES[:16]
+    # 7. Authenticated viewer: full GET returns 200 + bytes match.
+    full = await user.get(stream_path)
+    assert full.status_code == 200, full.text
+    assert full.content == MP4_BYTES
+    assert full.headers.get("accept-ranges") == "bytes"
+
+    # 8. Range request returns 206 + partial bytes.
+    rng = await user.get(stream_path, headers={"Range": "bytes=0-15"})
+    assert rng.status_code == 206
+    assert rng.content == MP4_BYTES[:16]
 
 
 @pytest.mark.asyncio
-async def test_teaching_material_upload_and_public_download(
-    contributor: Client, admin: Client,
+async def test_teaching_material_upload_and_member_download(
+    contributor: Client, admin: Client, user: Client,
 ) -> None:
     r = await contributor.post(
         "/items",
@@ -140,9 +150,16 @@ async def test_teaching_material_upload_and_public_download(
     async with httpx.AsyncClient(base_url=BASE) as anon:
         atts = (await anon.get(f"/items/{iid}/attachments")).json()
         primary = [a for a in atts if a["role"] == "teaching_material_file"][0]
-        full = await anon.get(primary["stream_url"].replace("/api", ""))
-        assert full.status_code == 200
-        assert full.content == payload
+        stream_path = primary["stream_url"].replace("/api", "")
+        # Content gate: anonymous download is rejected.
+        denied = await anon.get(stream_path)
+        assert denied.status_code == 401, denied.text
+        assert denied.json().get("detail") == "login_required"
+
+    # Authenticated viewer can download the file.
+    full = await user.get(stream_path)
+    assert full.status_code == 200
+    assert full.content == payload
 
 
 @pytest.mark.asyncio

@@ -192,7 +192,14 @@ async def get_item(
             raise HTTPException(status.HTTP_404_NOT_FOUND) from e  # don't leak existence
     info = await _author_info_for(s, [item.author_id])
     slug, dn = info.get(item.author_id, (None, None))
-    return _to_out(item, author_slug=slug, author_display_name=dn)
+    out = _to_out(item, author_slug=slug, author_display_name=dn)
+    # Content gate: the embed-video URL and the external teaching-material
+    # link are consumable payload. Withhold them from anonymous visitors so
+    # the player/link is only revealed after login. Item metadata and (for
+    # articles) the body_html stay public.
+    if actor.user_id is None:
+        out.external_url = None
+    return out
 
 
 class ItemRawOut(BaseModel):
@@ -331,7 +338,10 @@ async def list_items(
     out: list[ItemOut] = []
     for r in rows:
         slug, dn = info.get(r.author_id, (None, None))
-        out.append(_to_out(r, author_slug=slug, author_display_name=dn))
+        o = _to_out(r, author_slug=slug, author_display_name=dn)
+        if actor.user_id is None:
+            o.external_url = None  # content gate — see get_item
+        out.append(o)
     return out
 
 

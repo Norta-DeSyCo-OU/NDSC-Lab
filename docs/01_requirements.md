@@ -448,12 +448,12 @@ Priority: M. Source: integration test gap.
 
 Title: Hosted videos must stream to the browser end-to-end.
 
-Description: After a Contributor uploads a hosted video and an Admin publishes the item, any visitor to the public item page MUST be able to play the video in-browser without further authentication, with HTTP Range support so the browser can scrub. Only `clean` attachments of `published` items are publicly streamable.
+Description: After a Contributor uploads a hosted video and an Admin publishes the item, any **authenticated** visitor (User / Contributor / Admin) MUST be able to play the video in-browser, with HTTP Range support so the browser can scrub. Anonymous visitors still see the item page (title, summary, byline, license, article body) but the consumable payload — video playback, file downloads, embed-video player — requires login. (Amended 2026-05-20: content gate, see §4 locked decision.)
 
 Sub-requirements:
 
-- **FR-VIDEO-006a** — `GET /items/{item_id}/attachments` returns the public-safe list (`clean` + `published` only); owner/admin see all states.
-- **FR-VIDEO-006b** — `GET /uploads/{attachment_id}/stream` streams the file with `Accept-Ranges: bytes`. Range → `206 Content-Range`. API proxies bytes from R2/MinIO. Public iff `state='clean'` and `parent.state='published'`; owner/admin otherwise.
+- **FR-VIDEO-006a** — `GET /items/{item_id}/attachments` returns the public-safe list (`clean` + `published` only); owner/admin see all states. Anonymous callers still receive the metadata list so the item page can render a "log in to watch" prompt.
+- **FR-VIDEO-006b** — `GET /uploads/{attachment_id}/stream` streams the file with `Accept-Ranges: bytes`. Range → `206 Content-Range`. API proxies bytes from R2/MinIO. An attachment is streamable iff `state='clean'` AND `parent.state='published'` AND the requester is authenticated (any role: User/Contributor/Admin); owner/admin always (incl. preview while `scanning`). Anonymous → `401 login_required`; non-existent / unpublished / quarantined → `404` (no existence leak). `GET /uploads/{attachment_id}/url` (presigned URL) shares the identical authorization via one helper, so it cannot become a side door.
 - **FR-VIDEO-006c** — Item page renders `<video controls>` for hosted videos, click-to-play iframe for embed videos (D-09), and downloadable file list for teaching material.
 - **FR-VIDEO-006d** — Background `worker` container drains `queue:scan` (ClamAV) without operator intervention; included in `docker compose up`.
 

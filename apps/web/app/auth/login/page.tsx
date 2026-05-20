@@ -7,6 +7,20 @@ import { setMe, type Me } from "@/lib/useMe";
 import { Field } from "@/components/Field";
 import { Alert } from "@/components/Alert";
 
+/**
+ * Validate a post-login redirect target. Only same-origin absolute paths
+ * are allowed — this blocks open-redirect abuse where `?next=` points at
+ * an attacker-controlled site (`//evil.com`, `https://evil.com`, or a
+ * backslash-smuggled variant).
+ */
+function safeNext(raw: string | null): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/")) return "/";
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  if (raw.includes("://")) return "/";
+  return raw;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -21,7 +35,12 @@ export default function LoginPage() {
     try {
       const me = await apiPost<Me>("/auth/login", { email, password });
       setMe(me);
-      router.push("/");
+      const next = safeNext(
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("next")
+          : null,
+      );
+      router.push(next);
     } catch (e) {
       const code = e instanceof ApiError ? e.code : "unknown";
       setErr(

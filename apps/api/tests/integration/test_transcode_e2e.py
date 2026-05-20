@@ -1,9 +1,9 @@
 """End-to-end transcode workflow (FR-VIDEO-006 extended).
 
 Verifies that a non-MP4 hosted video upload (e.g. .mov) is auto-transcoded by
-the worker into a web-friendly H.264/MP4 with `+faststart`, and that the
-public `<ItemPlayer>` will receive a `video_transcoded` attachment ready to
-stream.
+the worker into a web-friendly H.264/MP4 with `+faststart`, and that an
+authenticated viewer receives a `video_transcoded` attachment ready to
+stream (anonymous requests are rejected by the content gate).
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def _gen_mov(path: str) -> bytes:
 
 @pytest.mark.asyncio
 async def test_mov_upload_is_auto_transcoded_to_mp4(
-    contributor: Client, admin: Client, tmp_path,
+    contributor: Client, admin: Client, user: Client, tmp_path,
 ) -> None:
     # 1. Create hosted video item.
     r = await contributor.post(
@@ -107,15 +107,19 @@ async def test_mov_upload_is_auto_transcoded_to_mp4(
         atts = (await anon.get(f"/items/{iid}/attachments")).json()
         roles = {a["role"] for a in atts}
         assert "video_transcoded" in roles, atts
-
-        # 6. Stream the transcoded MP4: 200 + `Content-Type: video/mp4`.
         tx = next(a for a in atts if a["role"] == "video_transcoded")
-        full = await anon.get(tx["stream_url"].replace("/api", ""))
-        assert full.status_code == 200
-        assert full.headers.get("content-type") == "video/mp4"
-        # The body must begin with an ISO BMFF (`ftyp`) atom, which both MP4
-        # and properly-encoded MOV share. Faststart places it at byte 4-7.
-        assert full.content[4:8] == b"ftyp", full.content[:16]
+        stream_path = tx["stream_url"].replace("/api", "")
+        # Content gate: anonymous stream is rejected.
+        denied = await anon.get(stream_path)
+        assert denied.status_code == 401, denied.text
+
+    # 6. Authenticated viewer streams the transcoded MP4: 200 + `video/mp4`.
+    full = await user.get(stream_path)
+    assert full.status_code == 200
+    assert full.headers.get("content-type") == "video/mp4"
+    # The body must begin with an ISO BMFF (`ftyp`) atom, which both MP4
+    # and properly-encoded MOV share. Faststart places it at byte 4-7.
+    assert full.content[4:8] == b"ftyp", full.content[:16]
 
 
 @pytest.mark.asyncio
