@@ -14,6 +14,11 @@ services:
     depends_on:
       - api
       - web
+    # `default` reaches this stack's api/web; `web-edge` reaches the two
+    # marketing-site containers (separate compose projects).
+    networks:
+      - default
+      - web-edge
 
   api:
     build:
@@ -158,3 +163,11 @@ volumes:
   grafana_data:
   caddy_data:
   caddy_config:
+
+networks:
+  # Shared edge network — created once on the server with:
+  #   docker network create web-edge
+  # The marketing-site `web` containers attach to it so the portal's Caddy
+  # can reverse-proxy to them across compose projects.
+  web-edge:
+    external: true

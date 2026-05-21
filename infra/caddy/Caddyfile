@@ -1,46 +1,68 @@
-# Caddyfile — production fronted by Cloudflare; trust CF as origin proxy.
-# In production: replace `:80` with `your.domain` and set CF to "Full (strict)".
-# Cloudflare IP allowlist is enforced at the host firewall (see ops/runbooks/firewall.md).
+# Shared edge proxy for all three products. One Caddy on :80/:443,
+# automatic Let's Encrypt TLS per domain.
+#
+#   lab.nortadesyco.xyz    -> NDSC Lab portal    (web + api in THIS compose)
+#   nortadesyco.xyz        -> Norta DeSyCo site  (nortadesyco-web, via web-edge net)
+#   englishwithsoheila.net -> EnglishWithSoheila (englishwithsoheila-web, web-edge)
+#
+# The two marketing-site containers are reached over the external `web-edge`
+# Docker network (see the compose files of all three projects).
 
 {
-  email admin@example.invalid
-  servers {
-    trusted_proxies static private_ranges
-  }
+	email sowelu94@gmail.com
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
 
-:80 {
-  encode zstd gzip
-
-  # Allow large uploads (video originals can be many GB before transcoding).
-  request_body {
-    max_size 100GB
-  }
-
-  # Strict headers; CSP nonces should come from app responses if app emits them.
-  header {
-    X-Content-Type-Options "nosniff"
-    X-Frame-Options "DENY"
-    Referrer-Policy "strict-origin-when-cross-origin"
-    Permissions-Policy "interest-cohort=()"
-    # HSTS only after TLS is live in front:
-    # Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-    -Server
-  }
-
-  handle_path /api/* {
-    reverse_proxy api:8000
-  }
-
-  handle /healthz {
-    reverse_proxy api:8000
-  }
-
-  handle /.well-known/* {
-    reverse_proxy api:8000
-  }
-
-  handle {
-    reverse_proxy web:3000
-  }
+(security_headers) {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "interest-cohort=()"
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		-Server
+	}
 }
+
+# ---- NDSC Lab portal -------------------------------------------------------
+lab.nortadesyco.xyz {
+	encode zstd gzip
+	import security_headers
+
+	# Video originals can be many GB before transcoding.
+	request_body {
+		max_size 100GB
+	}
+
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+	handle /healthz {
+		reverse_proxy api:8000
+	}
+	handle /.well-known/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+# ---- Norta DeSyCo marketing site ------------------------------------------
+nortadesyco.xyz {
+	encode zstd gzip
+	reverse_proxy nortadesyco-web:8080
+}
+
+www.nortadesyco.xyz {
+	redir https://nortadesyco.xyz{uri} permanent
+}
+
+# ---- EnglishWithSoheila ---------------------------------------------------
+# Not migrated yet — pending authorization. When ready, add:
+#   englishwithsoheila.net    { encode zstd gzip
+#                               reverse_proxy englishwithsoheila-web:8080 }
+#   www.englishwithsoheila.net { redir https://englishwithsoheila.net{uri} permanent }
+# and re-attach the `web-edge` network in that project's compose.
