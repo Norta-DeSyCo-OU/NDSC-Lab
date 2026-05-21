@@ -162,3 +162,51 @@ async def consume_password_reset(s: AsyncSession, *, token: str, new_password: s
     user.password_hash = hash_password(new_password)
     user.password_changed_at = datetime.now(UTC)
     return True
+
+
+# Resend-verification rate limits — anti email-bombing.
+# Per-ACCOUNT is the real protection: one address can never receive more than
+# 5 verification emails/hour, however the request is made. Per-IP is a coarser
+# flood cap, kept generous so a shared NAT (a conference venue, a campus) does
+# not lock out several legitimate users registering at once.
+_RESEND_VERIFY_PER_IP = 30        # per IP per 15 min
+_RESEND_VERIFY_PER_ACCOUNT = 5   # per email address per hour
+
+
+async def request_verification_resend(
+    s: AsyncSession, *, email: str, ip: str | None
+) -> str | None:
+    """Re-issue an email-verification token for an unverified account.
+
+    Returns a token ONLY when the address belongs to an existing
+    `pending_verify` account; returns None otherwise (no account, already
+    verified, banned, deleted). The caller MUST respond identically
+    regardless of the return value — no account enumeration.
+
+    Rate-limited per IP and per submitted email *before* the account
+    lookup, so the limiter behaves identically for real and unknown
+    addresses (no enumeration via limiter behaviour) and a single address
+    cannot be flooded with verification emails.
+
+    Reuses the exact token type signup issues (`auth.verify`), so the
+    existing `/auth/verify` consume path handles it unchanged — no new
+    token kind, no new attack surface. Issues only; writes no state.
+    """
+    r = await get_redis()
+    await hit(
+        r,
+        bucket=f"verifyresend:ip:{ip or 'none'}",
+        limit=_RESEND_VERIFY_PER_IP,
+        window_s=15 * 60,
+    )
+    await hit(
+        r,
+        bucket=f"verifyresend:acct:{email.lower()}",
+        limit=_RESEND_VERIFY_PER_ACCOUNT,
+        window_s=60 * 60,
+    )
+
+    user = await s.scalar(select(User).where(User.email == email))
+    if not user or user.state != "pending_verify" or user.email_verified_at is not None:
+        return None
+    return _verify_token_for(user.id)

@@ -129,6 +129,63 @@ async def test_auth_010_email_change_requires_password() -> None:
     await c.aclose()
 
 
+_SIGNUP_BASE = {
+    "password": PASSWORD,
+    "age_confirmed": True,
+    "tos_version": TOS_V,
+    "cookie_consent_version": COOKIE_V,
+    "analytics_opt_in": False,
+}
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_pending_user(anon: Client) -> None:
+    email = unique_email("rv-pending")
+    await anon.post("/auth/signup", json={"email": email, **_SIGNUP_BASE})
+    r = await anon.post("/auth/resend-verification", json={"email": email})
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+    # Resend issues a token + sends mail — it must NOT mutate account state.
+    row = db_one("SELECT state, email_verified_at FROM users WHERE email=%(e)s", e=email)
+    assert row.state == "pending_verify"
+    assert row.email_verified_at is None
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_no_enumeration(anon: Client) -> None:
+    """Identical response for pending / already-active / non-existent —
+    the endpoint must never reveal whether an address is registered."""
+    pending = unique_email("rv-enum-pending")
+    await anon.post("/auth/signup", json={"email": pending, **_SIGNUP_BASE})
+
+    active = unique_email("rv-enum-active")
+    await anon.post("/auth/signup", json={"email": active, **_SIGNUP_BASE})
+    db_exec(
+        "UPDATE users SET state='active', email_verified_at=now() WHERE email=%(e)s",
+        e=active,
+    )
+
+    r_pending = await anon.post("/auth/resend-verification", json={"email": pending})
+    r_active = await anon.post("/auth/resend-verification", json={"email": active})
+    r_nobody = await anon.post(
+        "/auth/resend-verification", json={"email": unique_email("rv-enum-nobody")}
+    )
+    assert r_pending.status_code == r_active.status_code == r_nobody.status_code == 200
+    assert r_pending.json() == r_active.json() == r_nobody.json() == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_rate_limited(anon: Client) -> None:
+    """One address cannot be flooded — per-account limit trips at 5/hour."""
+    email = unique_email("rv-rl")
+    await anon.post("/auth/signup", json={"email": email, **_SIGNUP_BASE})
+    codes = [
+        (await anon.post("/auth/resend-verification", json={"email": email})).status_code
+        for _ in range(8)
+    ]
+    assert 429 in codes, codes
+
+
 @pytest.mark.asyncio
 async def test_auth_009_mfa_columns_exist() -> None:
     row = db_one(

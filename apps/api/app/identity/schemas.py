@@ -46,6 +46,10 @@ class ForgotIn(BaseModel):
     email: EmailStr
 
 
+class ResendVerificationIn(BaseModel):
+    email: EmailStr
+
+
 class ResetIn(BaseModel):
     token: str
     password: Annotated[str, Field(min_length=PASSWORD_MIN, max_length=256)]

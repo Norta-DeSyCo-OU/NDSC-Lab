@@ -20,6 +20,7 @@ from app.identity.schemas import (
     GenericOK,
     LoginIn,
     MeOut,
+    ResendVerificationIn,
     ResetIn,
     SignupIn,
 )
@@ -30,6 +31,7 @@ from app.identity.service import (
     consume_verification_token,
     password_login,
     request_password_reset,
+    request_verification_resend,
     signup,
 )
 from app.identity.sessions import (
@@ -154,6 +156,27 @@ async def forgot_endpoint(
     token = await request_password_reset(s, email=body.email)
     if token:
         await send_password_reset_email(body.email, token)
+    return GenericOK()
+
+
+@router.post("/resend-verification", response_model=GenericOK)
+async def resend_verification_endpoint(
+    body: ResendVerificationIn,
+    request: Request,
+    s: Annotated[AsyncSession, Depends(get_session)],
+) -> GenericOK:
+    """Re-send the email-verification link for an unverified account.
+
+    Mirrors `/forgot`: CSRF-guarded, rate-limited, and returns the same
+    `GenericOK` whether or not the address is a real pending account —
+    no enumeration. The email is sent only for a genuine `pending_verify`
+    account (handled inside `request_verification_resend`).
+    """
+    require_csrf(request)
+    ip = request.client.host if request.client else None
+    token = await request_verification_resend(s, email=body.email, ip=ip)
+    if token:
+        await send_verification_email(body.email, token)
     return GenericOK()
 
 
